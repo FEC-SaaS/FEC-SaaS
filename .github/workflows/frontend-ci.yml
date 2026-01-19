@@ -63,28 +63,73 @@ jobs:
       - name: Set matrix
         id: set-matrix
         run: |
-          changed_apps=()
-          
-          # Check each app directory for changes
-          for app in web mobile admin-portal staff-app kiosk digital-menu kds-dashboard party-host-tablet analytics-dashboard smart-watch tv-dashboard; do
-            if [[ "${{ steps.changed-files.outputs.all_changed_files }}" == *"apps/$app"* ]]; then
-              changed_apps+=("$app")
+            declare -a ALL_APPS=(
+            web
+            mobile
+            admin-portal
+            staff-app
+            kiosk
+            digital-menu
+            kds-dashboard
+            party-host-tablet
+            analytics-dashboard
+            smart-watch
+            tv-dashboard
+            )
+
+            CHANGED_FILES="${{ steps.changed-files.outputs.all_changed_files }}"
+
+            echo "Changed files:"
+            echo "$CHANGED_FILES"
+
+            declare -a CHANGED_APPS=()
+
+            for app in "${ALL_APPS[@]}"; do
+            if echo "$CHANGED_FILES" | grep -q "apps/$app/"; then
+                CHANGED_APPS+=("$app")
             fi
-          done
+            done
+
+            # If packages changed, scan all apps
+            if echo "$CHANGED_FILES" | grep -q "^packages/"; then
+            CHANGED_APPS=("${ALL_APPS[@]}")
+            fi
+
+            if [ ${#CHANGED_APPS[@]} -eq 0 ]; then
+            echo "has-changes=false" >> "$GITHUB_OUTPUT"
+            echo 'matrix={"app":[]}' >> "$GITHUB_OUTPUT"
+            else
+            echo "has-changes=true" >> "$GITHUB_OUTPUT"
+            APPS_JSON=$(printf '%s\n' "${CHANGED_APPS[@]}" | jq -R . | jq -s -c .)
+            echo "matrix={\"app\":$APPS_JSON}" >> "$GITHUB_OUTPUT"
+            fi
+
+
+    #   - name: Set matrix
+    #     id: set-matrix
+    #     run: |
+    #       changed_apps=()
           
-          # Check if packages changed (affects all apps)
-          if [[ "${{ steps.changed-files.outputs.all_changed_files }}" == *"packages/"* ]]; then
-            changed_apps=(web mobile admin-portal staff-app kiosk digital-menu kds-dashboard party-host-tablet analytics-dashboard smart-watch tv-dashboard)
-          fi
+    #       # Check each app directory for changes
+    #       for app in web mobile admin-portal staff-app kiosk digital-menu kds-dashboard party-host-tablet analytics-dashboard smart-watch tv-dashboard; do
+    #         if [[ "${{ steps.changed-files.outputs.all_changed_files }}" == *"apps/$app"* ]]; then
+    #           changed_apps+=("$app")
+    #         fi
+    #       done
           
-          if [ ${#changed_apps[@]} -eq 0 ]; then
-            echo "has-changes=false" >> $GITHUB_OUTPUT
-            echo "matrix={\"app\":[]}" >> $GITHUB_OUTPUT
-          else
-            echo "has-changes=true" >> $GITHUB_OUTPUT
-            apps_json=$(printf '%s\n' "${changed_apps[@]}" | jq -R . | jq -s -c .)
-            echo "matrix={\"app\":$apps_json}" >> $GITHUB_OUTPUT
-          fi
+    #       # Check if packages changed (affects all apps)
+    #       if [[ "${{ steps.changed-files.outputs.all_changed_files }}" == *"packages/"* ]]; then
+    #         changed_apps=(web mobile admin-portal staff-app kiosk digital-menu kds-dashboard party-host-tablet analytics-dashboard smart-watch tv-dashboard)
+    #       fi
+          
+    #       if [ ${#changed_apps[@]} -eq 0 ]; then
+    #         echo "has-changes=false" >> $GITHUB_OUTPUT
+    #         echo "matrix={\"app\":[]}" >> $GITHUB_OUTPUT
+    #       else
+    #         echo "has-changes=true" >> $GITHUB_OUTPUT
+    #         apps_json=$(printf '%s\n' "${changed_apps[@]}" | jq -R . | jq -s -c .)
+    #         echo "matrix={\"app\":$apps_json}" >> $GITHUB_OUTPUT
+    #       fi
 
   pnpm-audit:
     name: pnpm Audit - ${{ matrix.app }}

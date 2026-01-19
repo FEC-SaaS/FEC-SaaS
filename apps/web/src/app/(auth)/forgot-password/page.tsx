@@ -1,6 +1,7 @@
 // Path: apps/web/src/app/(auth)/forgot-password/page.tsx
 // Forgot password page with email submission
 
+
 'use client';
 
 import { useState } from 'react';

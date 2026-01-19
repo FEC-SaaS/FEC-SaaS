@@ -273,13 +273,14 @@ jobs:
           fetch-depth: 0
 
       - name: SonarQube Scan
-        uses: sonarsource/sonarqube-scan-action@master
+        uses: SonarSource/sonarqube-scan-action@v6
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         with:
           projectBaseDir: apps/${{ matrix.app }}
           args: >
+            -Dsonar.organization=fec-saas
             -Dsonar.projectKey=fec-saas-${{ matrix.app }}
             -Dsonar.projectName=FEC-SaaS-${{ matrix.app }}
 

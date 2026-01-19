@@ -1,0 +1,114 @@
+# =============================================================================
+# Docker Compose - Auth Service Development Environment
+# =============================================================================
+# Usage:
+#   docker-compose up -d              # Start all services
+#   docker-compose up -d --build      # Rebuild and start
+#   docker-compose logs -f auth       # View auth service logs
+#   docker-compose down               # Stop all services
+#   docker-compose down -v            # Stop and remove volumes
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Auth Service
+  # ---------------------------------------------------------------------------
+  auth:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: fec-auth-service
+    ports:
+      - "8000:8000"
+    environment:
+      - AUTH_ENV=local
+      - AUTH_DEBUG=true
+      - AUTH_SECRET_KEY=KVjSuk2TOkr5ZBu7QXDoYMJseFKeoPQR_kY_QA9HWj8
+      - AUTH_DATABASE_URL=postgresql://postgres:postgres@postgres:5432/auth_db
+      - AUTH_REDIS_URL=redis://redis:6379/0
+      - AUTH_BACKEND_CORS_ORIGINS=http://localhost:3000,http://localhost:8080
+    volumes:
+      - ./app:/app/app:ro
+      - ./alembic:/app/alembic:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - auth-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/auth/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL Database
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: fec-auth-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=auth_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - auth-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d auth_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Redis (for session storage and token blacklist)
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: fec-auth-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - auth-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+  # ---------------------------------------------------------------------------
+  # Adminer (Database Management UI) - Development only
+  # ---------------------------------------------------------------------------
+  adminer:
+    image: adminer:latest
+    container_name: fec-auth-adminer
+    ports:
+      - "8080:8080"
+    networks:
+      - auth-network
+    depends_on:
+      - postgres
+    profiles:
+      - tools
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  auth-network:
+    driver: bridge
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  postgres_data:
+  redis_data:

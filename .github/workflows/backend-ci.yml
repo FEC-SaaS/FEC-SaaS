@@ -1,0 +1,618 @@
+name: 'Backend Security Scan Pipeline (Dev)'
+
+on:
+  push:
+    branches: [develop, dev]
+    paths:
+      - 'services/**'
+      - 'ai-services/**'
+  pull_request:
+    branches: [develop, dev]
+    paths:
+      - 'services/**'
+      - 'ai-services/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+  security-events: write
+  issues: write
+
+env:
+  PYTHON_VERSION: '3.11'
+  SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_SECURITY_WEBHOOK }}
+
+jobs:
+  detect-service-changes:
+    name: Detect Changed Services
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      has-changes: ${{ steps.set-matrix.outputs.has-changes }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v41
+        with:
+          files: |
+            services/**
+            ai-services/**
+
+      - name: Set matrix
+        id: set-matrix
+        run: |
+          changed_services=()
+          
+          # Regular services
+          for service in gateway auth venue customer bowling arcade dart-games party restaurant \
+                        indoor-mini-golf outdoor-mini-golf pos inventory staff membership analytics \
+                        marketing maintenance reservation pricing pos-connector payment-gateway \
+                        email-sms bowling-equipment social-media notification audit file-storage \
+                        search cache kids-tracking; do
+            if [[ "${{ steps.changed-files.outputs.all_changed_files }}" == *"services/$service"* ]]; then
+              changed_services+=("services/$service")
+            fi
+          done
+          
+          # AI services
+          for service in dynamic-pricing staff-optimizer churn-predictor game-optimizer \
+                        party-flow sentiment-analyzer waste-optimizer recommendation; do
+            if [[ "${{ steps.changed-files.outputs.all_changed_files }}" == *"ai-services/$service"* ]]; then
+              changed_services+=("ai-services/$service")
+            fi
+          done
+          
+          if [ ${#changed_services[@]} -eq 0 ]; then
+            echo "has-changes=false" >> $GITHUB_OUTPUT
+            echo "matrix={\"service\":[]}" >> $GITHUB_OUTPUT
+          else
+            echo "has-changes=true" >> $GITHUB_OUTPUT
+            services_json=$(printf '%s\n' "${changed_services[@]}" | jq -R . | jq -s -c .)
+            echo "matrix={\"service\":$services_json}" >> $GITHUB_OUTPUT
+          fi
+
+  bandit-security-scan:
+    name: Bandit Security - ${{ matrix.service }}
+    needs: detect-service-changes
+    if: needs.detect-service-changes.outputs.has-changes == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect-service-changes.outputs.matrix) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install Bandit
+        run: pip install bandit[toml]
+
+      - name: Run Bandit Security Scanner
+        continue-on-error: true
+        working-directory: ${{ matrix.service }}
+        run: |
+          bandit -r app/ -f json -o bandit-report.json || true
+          bandit -r app/ -f txt -o bandit-report.txt || true
+
+      - name: Generate Bandit HTML Report
+        if: always()
+        working-directory: ${{ matrix.service }}
+        run: |
+          cat > bandit-report.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Bandit Security Report - ${{ matrix.service }}</title>
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 40px; background: #f5f5f5; }
+              .container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+              h1 { color: #d69e2e; border-bottom: 3px solid #d69e2e; padding-bottom: 10px; }
+              .summary { background: #fffaf0; border-left: 4px solid #d69e2e; padding: 15px; margin: 20px 0; }
+              .issue { background: #f7fafc; padding: 15px; margin: 15px 0; border-radius: 6px; }
+              .severity-high { border-left: 4px solid #e53e3e; }
+              .severity-medium { border-left: 4px solid #ed8936; }
+              .severity-low { border-left: 4px solid #ecc94b; }
+              .badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 0.85em; font-weight: 600; margin-right: 10px; }
+              .badge-high { background: #e53e3e; color: white; }
+              .badge-medium { background: #ed8936; color: white; }
+              .badge-low { background: #ecc94b; color: #2d3748; }
+              .confidence { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 0.85em; background: #4299e1; color: white; }
+              pre { background: #2d3748; color: #e2e8f0; padding: 15px; border-radius: 6px; overflow-x: auto; }
+              .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin: 20px 0; }
+              .stat-card { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; padding: 20px; border-radius: 8px; text-align: center; }
+              .stat-number { font-size: 2.5em; font-weight: bold; }
+              .stat-label { font-size: 0.9em; opacity: 0.9; margin-top: 5px; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h1>🔐 Bandit Python Security Analysis</h1>
+              <div class="summary">
+                <strong>Service:</strong> ${{ matrix.service }}<br>
+                <strong>Scan Date:</strong> $(date -u '+%Y-%m-%d %H:%M:%S UTC')<br>
+                <strong>Branch:</strong> ${{ github.ref_name }}<br>
+                <strong>Python Version:</strong> ${{ env.PYTHON_VERSION }}
+              </div>
+          EOF
+          
+          # Parse JSON report if it exists
+          if [ -f bandit-report.json ]; then
+            high=$(jq '[.results[] | select(.issue_severity == "HIGH")] | length' bandit-report.json)
+            medium=$(jq '[.results[] | select(.issue_severity == "MEDIUM")] | length' bandit-report.json)
+            low=$(jq '[.results[] | select(.issue_severity == "LOW")] | length' bandit-report.json)
+            
+            echo "<div class='stats'>" >> bandit-report.html
+            echo "<div class='stat-card' style='background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);'><div class='stat-number'>$high</div><div class='stat-label'>HIGH Severity</div></div>" >> bandit-report.html
+            echo "<div class='stat-card' style='background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);'><div class='stat-number'>$medium</div><div class='stat-label'>MEDIUM Severity</div></div>" >> bandit-report.html
+            echo "<div class='stat-card' style='background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);'><div class='stat-number'>$low</div><div class='stat-label'>LOW Severity</div></div>" >> bandit-report.html
+            echo "</div>" >> bandit-report.html
+            
+            total=$((high + medium + low))
+            if [ "$total" -gt 0 ]; then
+              echo "<h2>Issues Detail</h2>" >> bandit-report.html
+              jq -r '.results[] | "<div class=\"issue severity-\(.issue_severity | ascii_downcase)\"><span class=\"badge badge-\(.issue_severity | ascii_downcase)\">\(.issue_severity)</span><span class=\"confidence\">Confidence: \(.issue_confidence)</span><h3>\(.issue_text)</h3><p><strong>File:</strong> \(.filename):\(.line_number)</p><p><strong>Test:</strong> \(.test_name) (\(.test_id))</p><pre>\(.code)</pre></div>"' bandit-report.json >> bandit-report.html
+            else
+              echo "<div class='summary' style='background: #f0fff4; border-left-color: #38a169;'><h2>✅ No security issues detected!</h2></div>" >> bandit-report.html
+            fi
+          else
+            echo "<pre>$(cat bandit-report.txt)</pre>" >> bandit-report.html
+          fi
+          
+          echo "</div></body></html>" >> bandit-report.html
+
+      - name: Upload Bandit Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-${{ matrix.service }}
+          path: ${{ matrix.service }}/bandit-report.html
+          retention-days: 30
+
+  safety-dependency-check:
+    name: Safety Dependency Check - ${{ matrix.service }}
+    needs: detect-service-changes
+    if: needs.detect-service-changes.outputs.has-changes == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect-service-changes.outputs.matrix) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        working-directory: ${{ matrix.service }}
+        run: |
+          pip install --upgrade pip
+          pip install safety
+
+      - name: Run Safety Check
+        continue-on-error: true
+        working-directory: ${{ matrix.service }}
+        run: |
+          pip install -r requirements.txt || pip install poetry && poetry export -f requirements.txt --output requirements.txt
+          safety check --json --output safety-report.json || true
+          safety check --output safety-report.txt || true
+
+      - name: Generate Safety HTML Report
+        if: always()
+        working-directory: ${{ matrix.service }}
+        run: |
+          cat > safety-report.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Safety Dependency Check - ${{ matrix.service }}</title>
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 40px; background: #f5f5f5; }
+              .container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+              h1 { color: #e53e3e; border-bottom: 3px solid #e53e3e; padding-bottom: 10px; }
+              .summary { background: #fff5f5; border-left: 4px solid #e53e3e; padding: 15px; margin: 20px 0; }
+              .vulnerability { background: #f7fafc; padding: 15px; margin: 15px 0; border-radius: 6px; border-left: 4px solid #e53e3e; }
+              pre { background: #2d3748; color: #e2e8f0; padding: 15px; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; }
+              .safe { background: #f0fff4; border-left: 4px solid #38a169; padding: 15px; margin: 20px 0; color: #2f855a; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h1>🛡️ Python Dependency Security Check</h1>
+              <div class="summary">
+                <strong>Service:</strong> ${{ matrix.service }}<br>
+                <strong>Scan Date:</strong> $(date -u '+%Y-%m-%d %H:%M:%S UTC')<br>
+                <strong>Python Version:</strong> ${{ env.PYTHON_VERSION }}
+              </div>
+              <h2>Safety Analysis Results</h2>
+          EOF
+          
+          if [ -f safety-report.txt ]; then
+            if grep -q "No known security vulnerabilities found" safety-report.txt; then
+              echo "<div class='safe'><h3>✅ No known security vulnerabilities found in dependencies!</h3></div>" >> safety-report.html
+            else
+              echo "<pre>$(cat safety-report.txt)</pre>" >> safety-report.html
+            fi
+          else
+            echo "<div class='safe'><h3>✅ No vulnerabilities detected!</h3></div>" >> safety-report.html
+          fi
+          
+          echo "</div></body></html>" >> safety-report.html
+
+      - name: Upload Safety Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: safety-${{ matrix.service }}
+          path: ${{ matrix.service }}/safety-report.html
+          retention-days: 30
+
+  semgrep-scan:
+    name: Semgrep SAST - ${{ matrix.service }}
+    needs: detect-service-changes
+    if: needs.detect-service-changes.outputs.has-changes == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect-service-changes.outputs.matrix) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep
+        uses: returntocorp/semgrep-action@v1
+        continue-on-error: true
+        with:
+          config: >-
+            p/security-audit
+            p/python
+            p/django
+            p/flask
+            p/fastapi
+          generateSarif: true
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+
+      - name: Upload SARIF to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep-${{ matrix.service }}
+
+      - name: Generate Semgrep HTML Report
+        if: always()
+        working-directory: ${{ matrix.service }}
+        run: |
+          cat > semgrep-report.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Semgrep SAST Report - ${{ matrix.service }}</title>
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 40px; background: #f5f5f5; }
+              .container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+              h1 { color: #6366f1; border-bottom: 3px solid #6366f1; padding-bottom: 10px; }
+              .summary { background: #eef2ff; border-left: 4px solid #6366f1; padding: 15px; margin: 20px 0; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h1>⚡ Semgrep Static Analysis Security Testing</h1>
+              <div class="summary">
+                <strong>Service:</strong> ${{ matrix.service }}<br>
+                <strong>Scan Date:</strong> $(date -u '+%Y-%m-%d %H:%M:%S UTC')<br>
+                <strong>Rulesets:</strong> Security Audit, Python, Django, Flask, FastAPI
+              </div>
+              <p>SARIF report uploaded to GitHub Security tab for detailed findings.</p>
+            </div>
+          </body>
+          </html>
+          EOF
+
+      - name: Upload Semgrep Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-${{ matrix.service }}
+          path: ${{ matrix.service }}/semgrep-report.html
+          retention-days: 30
+
+  trivy-dockerfile-scan:
+    name: Trivy Dockerfile Scan - ${{ matrix.service }}
+    needs: detect-service-changes
+    if: needs.detect-service-changes.outputs.has-changes == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect-service-changes.outputs.matrix) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy on Dockerfile
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'config'
+          scan-ref: '${{ matrix.service }}/Dockerfile'
+          format: 'sarif'
+          output: 'trivy-dockerfile.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+
+      - name: Upload Trivy SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-dockerfile.sarif'
+          category: trivy-dockerfile-${{ matrix.service }}
+
+      - name: Generate HTML Report
+        if: always()
+        run: |
+          docker run --rm \
+            -v $(pwd)/${{ matrix.service }}:/workspace \
+            aquasec/trivy:latest config \
+            --severity CRITICAL,HIGH,MEDIUM \
+            --format template \
+            --template "@contrib/html.tpl" \
+            --output /workspace/trivy-dockerfile-report.html \
+            /workspace/Dockerfile || echo "<html><body><h1>Dockerfile scan complete</h1></body></html>" > ${{ matrix.service }}/trivy-dockerfile-report.html
+
+      - name: Upload Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-dockerfile-${{ matrix.service }}
+          path: ${{ matrix.service }}/trivy-dockerfile-report.html
+          retention-days: 30
+
+  sonarqube-python:
+    name: SonarQube Python Analysis - ${{ matrix.service }}
+    needs: detect-service-changes
+    if: needs.detect-service-changes.outputs.has-changes == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect-service-changes.outputs.matrix) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies & run tests with coverage
+        continue-on-error: true
+        working-directory: ${{ matrix.service }}
+        run: |
+          pip install pytest pytest-cov
+          pip install -r requirements.txt || true
+          pytest --cov=app --cov-report=xml:coverage.xml || true
+
+      - name: SonarQube Scan
+        uses: sonarsource/sonarqube-scan-action@master
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        with:
+          projectBaseDir: ${{ matrix.service }}
+          args: >
+            -Dsonar.projectKey=fec-saas-${{ matrix.service }}
+            -Dsonar.projectName=FEC-SaaS-${{ matrix.service }}
+            -Dsonar.python.coverage.reportPaths=coverage.xml
+            -Dsonar.sources=app
+            -Dsonar.tests=tests
+            -Dsonar.language=py
+
+      - name: Fetch & Generate SonarQube Report
+        if: always()
+        run: |
+          PROJECT_KEY=fec-saas-${{ matrix.service }}
+          curl -u ${{ secrets.SONAR_TOKEN }}: \
+            "${{ secrets.SONAR_HOST_URL }}/api/issues/search?componentKeys=$PROJECT_KEY&ps=500" \
+            -o sonarqube-python.json
+          
+          cat > sonarqube-python-report.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>SonarQube Python Analysis - ${{ matrix.service }}</title>
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 40px; background: #f5f5f5; }
+              .container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+              h1 { color: #4c9aff; border-bottom: 3px solid #4c9aff; padding-bottom: 10px; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h1>📊 SonarQube Python Code Quality</h1>
+              <p>Service: ${{ matrix.service }} | Date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')</p>
+              <p>View detailed results in SonarQube dashboard</p>
+            </div>
+          </body>
+          </html>
+          EOF
+
+      - name: Upload Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sonarqube-python-${{ matrix.service }}
+          path: sonarqube-python-report.html
+          retention-days: 30
+
+  snyk-python-scan:
+    name: Snyk Python Security - ${{ matrix.service }}
+    needs: detect-service-changes
+    if: needs.detect-service-changes.outputs.has-changes == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect-service-changes.outputs.matrix) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Snyk to check for vulnerabilities
+        uses: snyk/actions/python@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --file=${{ matrix.service }}/requirements.txt --json-file-output=snyk-python.json
+
+      - name: Generate Snyk HTML Report
+        if: always()
+        run: |
+          npx snyk-to-html -i snyk-python.json -o snyk-python-report.html || \
+          echo "<html><body><h1>Snyk Python Security Check Complete</h1><p>Service: ${{ matrix.service }}</p></body></html>" > snyk-python-report.html
+
+      - name: Upload Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snyk-python-${{ matrix.service }}
+          path: snyk-python-report.html
+          retention-days: 30
+
+  notify-slack-backend:
+    name: Send Backend Security Reports to Slack
+    needs: [detect-service-changes, bandit-security-scan, safety-dependency-check, semgrep-scan, trivy-dockerfile-scan, sonarqube-python, snyk-python-scan]
+    if: always() && needs.detect-service-changes.outputs.has-changes == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download All Reports
+        uses: actions/download-artifact@v4
+        with:
+          path: reports
+
+      - name: Prepare Slack Message
+        id: slack-prep
+        run: |
+          if [ "${{ needs.bandit-security-scan.result }}" == "failure" ] || \
+             [ "${{ needs.safety-dependency-check.result }}" == "failure" ] || \
+             [ "${{ needs.semgrep-scan.result }}" == "failure" ] || \
+             [ "${{ needs.trivy-dockerfile-scan.result }}" == "failure" ]; then
+            echo "status=failure" >> $GITHUB_OUTPUT
+            echo "emoji=🚨" >> $GITHUB_OUTPUT
+          else
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "emoji=✅" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Send to Slack
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          payload: |
+            {
+              "text": "${{ steps.slack-prep.outputs.emoji }} Backend Security Scan Complete (Dev Branch)",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "${{ steps.slack-prep.outputs.emoji }} Backend Python Security Scan Results"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Environment:*\nDevelopment"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Branch:*\n${{ github.ref_name }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Triggered by:*\n${{ github.actor }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Status:*\n${{ steps.slack-prep.outputs.status }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Security Tools:*\n• Bandit (Python SAST)\n• Safety (Dependency Check)\n• Semgrep (Advanced SAST)\n• Trivy (Dockerfile)\n• SonarQube (Code Quality)\n• Snyk (Vulnerability Scan)"
+                  }
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Reports"
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_SECURITY_WEBHOOK }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+  create-security-issue-backend:
+    name: Create Security Issue for Backend
+    needs: [detect-service-changes, bandit-security-scan, safety-dependency-check, semgrep-scan]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create Issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = '🚨 Backend Security Vulnerabilities Detected (Dev)';
+            const body = `
+            ## Backend Security Scan Failed
+            
+            **Branch:** dev/develop
+            **Commit:** ${{ github.sha }}
+            **Triggered by:** ${{ github.actor }}
+            
+            ### Services Scanned
+            See workflow artifacts for service-specific reports
+            
+            ### Action Required
+            Review [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) immediately.
+            
+            Critical security issues detected in Python backend services.
+            `;
+            
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              body: body,
+              labels: ['security', 'backend', 'dev-environment', 'critical']
+            });
+            

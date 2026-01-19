@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fec-auth
+  labels:
+    app.kubernetes.io/name: fec-auth
+    app.kubernetes.io/part-of: fec-saas

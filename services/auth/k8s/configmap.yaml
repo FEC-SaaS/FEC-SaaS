@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: auth-config
+  namespace: fec-auth
+  labels:
+    app.kubernetes.io/name: auth-service
+    app.kubernetes.io/component: config
+data:
+  AUTH_ENV: "production"
+  AUTH_DEBUG: "false"
+  AUTH_PROJECT_NAME: "fec-saas-auth-service"
+  AUTH_API_V1_STR: "/api/v1"
+  AUTH_ACCESS_TOKEN_EXPIRE_MINUTES: "15"
+  AUTH_REFRESH_TOKEN_EXPIRE_DAYS: "30"
+  AUTH_JWT_ALGORITHM: "HS256"

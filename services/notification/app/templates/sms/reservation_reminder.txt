@@ -1,0 +1,1 @@
+{{ venue_name }}: Reminder! Your reservation is {{ reminder_type }} ({{ reservation_date }} at {{ reservation_time }}). {{ waiver_pending }} waiver(s) pending. Reply HELP for info.

@@ -1,0 +1,28 @@
+{% extends "email/base.html" %}
+
+{% block title %}Welcome to {{ venue_name }}!{% endblock %}
+
+{% block content %}
+<h2>Welcome, {{ first_name | default('Guest') }}!</h2>
+
+<p>Thank you for joining {{ venue_name }}. We're excited to have you as part of our community!</p>
+
+<p>Here's what you can do with your new account:</p>
+
+<ul>
+    <li>Book parties and reservations online</li>
+    <li>Sign waivers digitally before your visit</li>
+    <li>Track your rewards and loyalty points</li>
+    <li>Receive special offers and birthday surprises</li>
+</ul>
+
+{% if verify_url %}
+<p style="text-align: center;">
+    <a href="{{ verify_url }}" class="button">Verify Your Email</a>
+</p>
+{% endif %}
+
+<p>If you have any questions, feel free to contact us at {{ support_email | default('support@example.com') }}.</p>
+
+<p>See you soon!<br>The {{ venue_name }} Team</p>
+{% endblock %}

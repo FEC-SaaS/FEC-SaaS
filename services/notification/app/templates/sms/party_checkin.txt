@@ -1,0 +1,1 @@
+{{ venue_name }}: {{ guest_name }}'s party is checked in! Your party room is {{ room_name }}. Have fun!

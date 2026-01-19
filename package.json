@@ -1,0 +1,23 @@
+{
+  "name": "fec-saas",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Family Entertainment Center SaaS Platform",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "type-check": "turbo run type-check",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "dev:admin": "pnpm --filter @fec-saas/admin-portal dev",
+    "build:packages": "pnpm --filter @fec-saas/types build && pnpm --filter @fec-saas/api-client build && pnpm --filter @fec-saas/ui build"
+  },
+  "devDependencies": {
+    "turbo": "^1.11.3",
+    "typescript": "^5.3.3"
+  },
+  "packageManager": "pnpm@8.14.0",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

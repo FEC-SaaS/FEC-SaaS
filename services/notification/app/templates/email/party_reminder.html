@@ -1,0 +1,42 @@
+{% extends "email/base.html" %}
+
+{% block title %}Reminder: Your Party is {{ reminder_type }}!{% endblock %}
+
+{% block content %}
+<h2>Your Party is {{ reminder_type }}!</h2>
+
+<p>Hi {{ guest_name | default('Guest') }},</p>
+
+<p>This is a friendly reminder about your upcoming party at {{ venue_name }}.</p>
+
+<div style="background-color: #e8f4fd; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4F46E5;">
+    <h3 style="margin-top: 0; color: #4F46E5;">Party Details</h3>
+    <p style="margin-bottom: 5px;"><strong>{{ reservation_date }}</strong> at <strong>{{ reservation_time }}</strong></p>
+    <p style="margin-bottom: 5px;">{{ party_size }} guests expected</p>
+    {% if package_name %}
+    <p style="margin-bottom: 0;">Package: {{ package_name }}</p>
+    {% endif %}
+</div>
+
+<h3>Before Your Visit</h3>
+<ul>
+    {% if waiver_pending %}
+    <li style="color: #dc3545;"><strong>{{ waiver_pending }} waiver(s) still need to be signed!</strong>
+        <a href="{{ waiver_url }}">Complete waivers now</a></li>
+    {% else %}
+    <li style="color: #28a745;">All waivers are signed</li>
+    {% endif %}
+    <li>Arrive {{ arrival_time | default('15 minutes') }} early for check-in</li>
+    <li>Remember to bring socks for all participants</li>
+</ul>
+
+{% if directions_url %}
+<p style="text-align: center;">
+    <a href="{{ directions_url }}" class="button">Get Directions</a>
+</p>
+{% endif %}
+
+<p>Questions? Call us at {{ contact_phone | default('(555) 123-4567') }}.</p>
+
+<p>See you soon!<br>The {{ venue_name }} Team</p>
+{% endblock %}

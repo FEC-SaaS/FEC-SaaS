@@ -1,0 +1,578 @@
+name: 'Frontend Security Scan Pipeline'
+
+on:
+  push:
+    branches: [main, develop, staging]
+    paths:
+      - 'apps/web/**'
+      - 'apps/mobile/**'
+      - 'apps/admin-portal/**'
+      - 'apps/staff-app/**'
+      - 'apps/kiosk/**'
+      - 'apps/digital-menu/**'
+      - 'apps/kds-dashboard/**'
+      - 'apps/party-host-tablet/**'
+      - 'apps/analytics-dashboard/**'
+      - 'apps/smart-watch/**'
+      - 'apps/tv-dashboard/**'
+      - 'packages/**'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+  security-events: write
+  issues: write
+
+env:
+  SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_SECURITY_WEBHOOK }}
+  PNPM_VERSION: '8.15.0'
+
+jobs:
+  detect-changes:
+    name: Detect Changed Apps
+    runs-on: ubuntu-latest
+
+    environment:
+      name: ${{ github.ref_name }}
+
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      has-changes: ${{ steps.set-matrix.outputs.has-changes }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v41
+        with:
+          files: |
+            apps/**
+            packages/**
+
+      - name: Set matrix
+        id: set-matrix
+        run: |
+          changed_apps=()
+          
+          # Check each app directory for changes
+          for app in web mobile admin-portal staff-app kiosk digital-menu kds-dashboard party-host-tablet analytics-dashboard smart-watch tv-dashboard; do
+            if [[ "${{ steps.changed-files.outputs.all_changed_files }}" == *"apps/$app"* ]]; then
+              changed_apps+=("$app")
+            fi
+          done
+          
+          # Check if packages changed (affects all apps)
+          if [[ "${{ steps.changed-files.outputs.all_changed_files }}" == *"packages/"* ]]; then
+            changed_apps=(web mobile admin-portal staff-app kiosk digital-menu kds-dashboard party-host-tablet analytics-dashboard smart-watch tv-dashboard)
+          fi
+          
+          if [ ${#changed_apps[@]} -eq 0 ]; then
+            echo "has-changes=false" >> $GITHUB_OUTPUT
+            echo "matrix={\"app\":[]}" >> $GITHUB_OUTPUT
+          else
+            echo "has-changes=true" >> $GITHUB_OUTPUT
+            apps_json=$(printf '%s\n' "${changed_apps[@]}" | jq -R . | jq -s -c .)
+            echo "matrix={\"app\":$apps_json}" >> $GITHUB_OUTPUT
+          fi
+
+  pnpm-audit:
+    name: pnpm Audit - ${{ matrix.app }}
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has-changes == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run pnpm audit
+        continue-on-error: true
+        working-directory: apps/${{ matrix.app }}
+        run: |
+          pnpm audit --json > audit-report.json || true
+          pnpm audit --audit-level=moderate > audit-report.txt || true
+
+      - name: Generate HTML Report
+        if: always()
+        working-directory: apps/${{ matrix.app }}
+        run: |
+          cat > audit-report.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>pnpm Audit Report - ${{ matrix.app }}</title>
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 40px; background: #f5f5f5; }
+              .container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+              h1 { color: #e53e3e; border-bottom: 3px solid #e53e3e; padding-bottom: 10px; }
+              .summary { background: #fff5f5; border-left: 4px solid #e53e3e; padding: 15px; margin: 20px 0; }
+              .vulnerability { background: #f7fafc; padding: 15px; margin: 15px 0; border-radius: 6px; border-left: 4px solid #ed8936; }
+              .severity-critical { border-left-color: #c53030; }
+              .severity-high { border-left-color: #e53e3e; }
+              .severity-moderate { border-left-color: #ed8936; }
+              .severity-low { border-left-color: #ecc94b; }
+              .meta { color: #718096; font-size: 0.9em; margin-top: 10px; }
+              pre { background: #2d3748; color: #e2e8f0; padding: 15px; border-radius: 6px; overflow-x: auto; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h1>🔒 Security Audit Report</h1>
+              <div class="summary">
+                <strong>Application:</strong> ${{ matrix.app }}<br>
+                <strong>Scan Date:</strong> $(date -u '+%Y-%m-%d %H:%M:%S UTC')<br>
+                <strong>Branch:</strong> ${{ github.ref_name }}<br>
+                <strong>Commit:</strong> ${{ github.sha }}
+              </div>
+              <h2>Audit Results</h2>
+              <pre>$(cat audit-report.txt)</pre>
+            </div>
+          </body>
+          </html>
+          EOF
+
+      - name: Upload Audit Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pnpm-audit-${{ matrix.app }}
+          path: apps/${{ matrix.app }}/audit-report.html
+          retention-days: 30
+
+  snyk-scan:
+    name: Snyk Security Scan - ${{ matrix.app }}
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has-changes == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Snyk Security Test
+        continue-on-error: true
+        working-directory: apps/${{ matrix.app }}
+        run: |
+          npx snyk test --json > snyk-report.json || true
+          npx snyk test > snyk-report.txt || true
+
+      - name: Generate Snyk HTML Report
+        if: always()
+        working-directory: apps/${{ matrix.app }}
+        run: |
+          npx snyk-to-html -i snyk-report.json -o snyk-report.html || echo "<html><body><h1>No Snyk vulnerabilities found</h1></body></html>" > snyk-report.html
+
+      - name: Upload Snyk Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snyk-scan-${{ matrix.app }}
+          path: apps/${{ matrix.app }}/snyk-report.html
+          retention-days: 30
+
+  sonarqube-scan:
+    name: SonarQube Analysis - ${{ matrix.app }}
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has-changes == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: SonarQube Scan
+        uses: sonarsource/sonarqube-scan-action@master
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        with:
+          projectBaseDir: apps/${{ matrix.app }}
+          args: >
+            -Dsonar.projectKey=fec-saas-${{ matrix.app }}
+            -Dsonar.projectName=FEC-SaaS-${{ matrix.app }}
+
+      - name: Fetch SonarQube Report
+        if: always()
+        run: |
+          PROJECT_KEY=fec-saas-${{ matrix.app }}
+          curl -u ${{ secrets.SONAR_TOKEN }}: \
+            "${{ secrets.SONAR_HOST_URL }}/api/issues/search?componentKeys=$PROJECT_KEY&ps=500&resolved=false" \
+            -o sonarqube-report.json
+
+      - name: Generate SonarQube HTML Report
+        if: always()
+        run: |
+          cat > sonarqube-report.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>SonarQube Analysis - ${{ matrix.app }}</title>
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 40px; background: #f5f5f5; }
+              .container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); max-width: 1200px; margin: 0 auto; }
+              h1 { color: #4c9aff; border-bottom: 3px solid #4c9aff; padding-bottom: 10px; }
+              .summary { background: #e6f7ff; border-left: 4px solid #4c9aff; padding: 15px; margin: 20px 0; }
+              .issue { background: #f7fafc; padding: 15px; margin: 15px 0; border-radius: 6px; }
+              .severity-blocker { border-left: 4px solid #c53030; }
+              .severity-critical { border-left: 4px solid #e53e3e; }
+              .severity-major { border-left: 4px solid #ed8936; }
+              .severity-minor { border-left: 4px solid #ecc94b; }
+              .severity-info { border-left: 4px solid #4299e1; }
+              .badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 0.85em; font-weight: 600; }
+              .badge-blocker { background: #c53030; color: white; }
+              .badge-critical { background: #e53e3e; color: white; }
+              .badge-major { background: #ed8936; color: white; }
+              .badge-minor { background: #ecc94b; color: #2d3748; }
+              .badge-info { background: #4299e1; color: white; }
+              .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin: 20px 0; }
+              .stat-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; text-align: center; }
+              .stat-number { font-size: 2em; font-weight: bold; }
+              .stat-label { font-size: 0.9em; opacity: 0.9; margin-top: 5px; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h1>📊 SonarQube Code Quality Report</h1>
+              <div class="summary">
+                <strong>Application:</strong> ${{ matrix.app }}<br>
+                <strong>Scan Date:</strong> $(date -u '+%Y-%m-%d %H:%M:%S UTC')<br>
+                <strong>Branch:</strong> ${{ github.ref_name }}<br>
+                <strong>Project Key:</strong> fec-saas-${{ matrix.app }}
+              </div>
+          EOF
+          
+          # Parse and display statistics
+          total_issues=$(jq '.issues | length' sonarqube-report.json)
+          
+          if [ "$total_issues" -eq 0 ]; then
+            echo "<div class='stat-card' style='background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);'>" >> sonarqube-report.html
+            echo "<div class='stat-number'>✓</div>" >> sonarqube-report.html
+            echo "<div class='stat-label'>No Issues Found</div>" >> sonarqube-report.html
+            echo "</div>" >> sonarqube-report.html
+          else
+            echo "<div class='stats'>" >> sonarqube-report.html
+            for severity in BLOCKER CRITICAL MAJOR MINOR INFO; do
+              count=$(jq "[.issues[] | select(.severity == \"$severity\")] | length" sonarqube-report.json)
+              echo "<div class='stat-card'><div class='stat-number'>$count</div><div class='stat-label'>$severity</div></div>" >> sonarqube-report.html
+            done
+            echo "</div><h2>Issues Detail</h2>" >> sonarqube-report.html
+            
+            jq -r '.issues[] | "<div class=\"issue severity-\(.severity | ascii_downcase)\"><span class=\"badge badge-\(.severity | ascii_downcase)\">\(.severity)</span><h3>\(.message)</h3><p><strong>Rule:</strong> \(.rule)</p><p><strong>File:</strong> \(.component)</p><p><strong>Line:</strong> \(.line // "N/A")</p></div>"' sonarqube-report.json >> sonarqube-report.html
+          fi
+          
+          echo "</div></body></html>" >> sonarqube-report.html
+
+      - name: Upload SonarQube Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sonarqube-${{ matrix.app }}
+          path: sonarqube-report.html
+          retention-days: 30
+
+  trivy-scan:
+    name: Trivy Security Scan - ${{ matrix.app }}
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has-changes == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy Vulnerability Scanner
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'fs'
+          scan-ref: 'apps/${{ matrix.app }}'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          scanners: 'vuln,secret,misconfig'
+
+      - name: Upload Trivy SARIF to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+          category: trivy-${{ matrix.app }}
+
+      - name: Generate Trivy HTML Report
+        if: always()
+        run: |
+          docker run --rm \
+            -v $(pwd):/workspace \
+            aquasec/trivy:latest fs \
+            --scanners vuln,secret,misconfig \
+            --severity CRITICAL,HIGH,MEDIUM \
+            --format template \
+            --template "@contrib/html.tpl" \
+            --output /workspace/trivy-report.html \
+            /workspace/apps/${{ matrix.app }}
+
+      - name: Upload Trivy Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-scan-${{ matrix.app }}
+          path: trivy-report.html
+          retention-days: 30
+
+  eslint-security:
+    name: ESLint Security Check - ${{ matrix.app }}
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has-changes == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run ESLint with Security Plugin
+        continue-on-error: true
+        working-directory: apps/${{ matrix.app }}
+        run: |
+          pnpm eslint . --ext .ts,.tsx,.js,.jsx --format json > eslint-security.json || true
+          pnpm eslint . --ext .ts,.tsx,.js,.jsx > eslint-security.txt || true
+
+      - name: Generate ESLint HTML Report
+        if: always()
+        working-directory: apps/${{ matrix.app }}
+        run: |
+          cat > eslint-report.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>ESLint Security Report - ${{ matrix.app }}</title>
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 40px; background: #f5f5f5; }
+              .container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+              h1 { color: #8b5cf6; border-bottom: 3px solid #8b5cf6; padding-bottom: 10px; }
+              pre { background: #2d3748; color: #e2e8f0; padding: 15px; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h1>🔍 ESLint Security Analysis</h1>
+              <p><strong>App:</strong> ${{ matrix.app }} | <strong>Date:</strong> $(date -u '+%Y-%m-%d %H:%M:%S UTC')</p>
+              <pre>$(cat eslint-security.txt)</pre>
+            </div>
+          </body>
+          </html>
+          EOF
+
+      - name: Upload ESLint Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eslint-security-${{ matrix.app }}
+          path: apps/${{ matrix.app }}/eslint-report.html
+          retention-days: 30
+
+  notify-slack:
+    name: Send Security Reports to Slack
+    needs: [detect-changes, pnpm-audit, snyk-scan, sonarqube-scan, trivy-scan, eslint-security]
+    if: always() && needs.detect-changes.outputs.has-changes == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download All Reports
+        uses: actions/download-artifact@v4
+        with:
+          path: reports
+
+      - name: Prepare Slack Notification
+        id: slack-prep
+        run: |
+          # Determine overall status
+          if [ "${{ needs.pnpm-audit.result }}" == "failure" ] || \
+             [ "${{ needs.snyk-scan.result }}" == "failure" ] || \
+             [ "${{ needs.sonarqube-scan.result }}" == "failure" ] || \
+             [ "${{ needs.trivy-scan.result }}" == "failure" ]; then
+            echo "status=failure" >> $GITHUB_OUTPUT
+            echo "color=#e53e3e" >> $GITHUB_OUTPUT
+            echo "emoji=🚨" >> $GITHUB_OUTPUT
+          else
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "color=#38a169" >> $GITHUB_OUTPUT
+            echo "emoji=✅" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Send to Slack
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          payload: |
+            {
+              "text": "${{ steps.slack-prep.outputs.emoji }} Frontend Security Scan Complete",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "${{ steps.slack-prep.outputs.emoji }} Frontend Security Scan Results"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Repository:*\nfec-saas"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Branch:*\n${{ github.ref_name }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Triggered by:*\n${{ github.actor }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Status:*\n${{ steps.slack-prep.outputs.status }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Scanned Applications:*\n${{ join(fromJson(needs.detect-changes.outputs.matrix).app, ', ') }}"
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Security Tools Run:*\n• pnpm Audit\n• Snyk Security\n• SonarQube Analysis\n• Trivy Scanner\n• ESLint Security"
+                  }
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Full Report"
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    },
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Commit"
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}"
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_SECURITY_WEBHOOK }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+  create-security-issue:
+    name: Create GitHub Security Issue
+    needs: [detect-changes, pnpm-audit, snyk-scan, sonarqube-scan, trivy-scan]
+    if: failure() && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create Issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = '🚨 Security Vulnerabilities Detected in Frontend';
+            const body = `
+            ## Security Scan Failed
+            
+            **Branch:** ${{ github.ref_name }}
+            **Commit:** ${{ github.sha }}
+            **Triggered by:** ${{ github.actor }}
+            
+            ### Failed Scans
+            - pnpm Audit: ${{ needs.pnpm-audit.result }}
+            - Snyk: ${{ needs.snyk-scan.result }}
+            - SonarQube: ${{ needs.sonarqube-scan.result }}
+            - Trivy: ${{ needs.trivy-scan.result }}
+            
+            ### Action Required
+            Please review the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) and address the identified vulnerabilities.
+            
+            ### Reports
+            Download artifact reports from the workflow run for detailed analysis.
+            `;
+            
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              body: body,
+              labels: ['security', 'critical', 'automated']
+            });

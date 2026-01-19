@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{{ subject }}{% endblock %}</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .header img {
+            max-width: 150px;
+            height: auto;
+        }
+        .content {
+            margin-bottom: 30px;
+        }
+        .button {
+            display: inline-block;
+            padding: 12px 24px;
+            background-color: #4F46E5;
+            color: #ffffff !important;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            margin: 20px 0;
+        }
+        .button:hover {
+            background-color: #4338CA;
+        }
+        .footer {
+            text-align: center;
+            font-size: 12px;
+            color: #666666;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eeeeee;
+        }
+        .footer a {
+            color: #4F46E5;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            {% if logo_url %}
+            <img src="{{ logo_url }}" alt="{{ venue_name }}">
+            {% else %}
+            <h1 style="color: #4F46E5;">{{ venue_name | default('FEC SaaS') }}</h1>
+            {% endif %}
+        </div>
+
+        <div class="content">
+            {% block content %}{% endblock %}
+        </div>
+
+        <div class="footer">
+            {% block footer %}
+            <p>
+                This email was sent by {{ venue_name | default('FEC SaaS') }}.<br>
+                {% if venue_address %}{{ venue_address }}<br>{% endif %}
+                {% if unsubscribe_url %}
+                <a href="{{ unsubscribe_url }}">Unsubscribe</a> |
+                {% endif %}
+                <a href="{{ preferences_url | default('#') }}">Manage Preferences</a>
+            </p>
+            {% endblock %}
+        </div>
+    </div>
+</body>
+</html>

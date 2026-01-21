@@ -283,8 +283,9 @@ jobs:
           projectBaseDir: apps/${{ matrix.app }}
           args: >
             -Dsonar.organization=fec-saas
-            -Dsonar.projectKey=fec-saas-${{ matrix.app }}
-            -Dsonar.projectName=FEC-SaaS-${{ matrix.app }}
+            -Dsonar.projectKey=FEC-SaaS_FEC-SaaS  
+            -Dsonar.projectName=FEC-SaaS
+            -Dsonar.sources=.
 
       - name: Fetch SonarQube Report
         if: always()

@@ -30,8 +30,8 @@ permissions:
 
 env:
   SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-  SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+  # SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  # SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
   SLACK_WEBHOOK_URL: ${{ secrets.SLACK_SECURITY_WEBHOOK }}
   PNPM_VERSION: '8.15.0'
 
@@ -511,6 +511,7 @@ jobs:
       - name: Send to Slack
         uses: slackapi/slack-github-action@v1.25.0
         with:
+          webhook-url: ${{ secrets.SLACK_SECURITY_WEBHOOK }}
           payload: |
             {
               "text": "${{ steps.slack-prep.outputs.emoji }} Frontend Security Scan Complete",
@@ -580,9 +581,9 @@ jobs:
                 }
               ]
             }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_SECURITY_WEBHOOK }}
-          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        # env:
+        #   SLACK_WEBHOOK_URL: ${{ secrets.SLACK_SECURITY_WEBHOOK }}
+        #   SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
 
   create-security-issue:
     name: Create GitHub Security Issue

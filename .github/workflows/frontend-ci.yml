@@ -2,7 +2,7 @@ name: 'Frontend Security Scan Pipeline'
 
 on:
   push:
-    branches: [main, develop, staging]
+    branches: [develop, staging]
     paths:
       - 'apps/web/**'
       - 'apps/mobile/**'
@@ -41,7 +41,7 @@ jobs:
     runs-on: ubuntu-latest
 
     environment:
-      name: develop #${{ github.ref_name }}
+      name: ${{ github.ref_name }}
 
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -264,7 +264,7 @@ jobs:
     if: needs.detect-changes.outputs.has-changes == 'true'
     runs-on: ubuntu-latest
     environment:
-      name: develop #${{ github.ref_name }}
+      name: ${{ github.ref_name }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
@@ -488,6 +488,9 @@ jobs:
     needs: [detect-changes, pnpm-audit, snyk-scan, sonarqube-scan, trivy-scan, eslint-security]
     if: always() && needs.detect-changes.outputs.has-changes == 'true'
     runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.ref_name }}
+
     steps:
       - name: Download All Reports
         uses: actions/download-artifact@v4

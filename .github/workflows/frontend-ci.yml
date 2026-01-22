@@ -17,7 +17,7 @@ on:
       - 'apps/tv-dashboard/**'
       - 'packages/**'
   pull_request:
-    branches: [main, develop]
+    branches: [develop]
     paths:
       - 'apps/**'
       - 'packages/**'

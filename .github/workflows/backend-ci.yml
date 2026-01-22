@@ -181,7 +181,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: bandit-${{ matrix.service }}
+          name: bandit-${{ matrix.service && replace(matrix.service, '/', '-') }}
           path: ${{ matrix.service }}/bandit-report.html
           retention-days: 30
 
@@ -270,7 +270,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: safety-${{ matrix.service }}
+          name: safety-${{ matrix.service && replace(matrix.service, '/', '-') }}
           path: ${{ matrix.service }}/safety-report.html
           retention-days: 30
 
@@ -344,7 +344,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: semgrep-${{ matrix.service }}
+          name: semgrep-${{ matrix.service && replace(matrix.service, '/', '-') }}
           path: ${{ matrix.service }}/semgrep-report.html
           retention-days: 30
 
@@ -394,7 +394,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: trivy-dockerfile-${{ matrix.service }}
+          name: trivy-dockerfile-${{ matrix.service && replace(matrix.service, '/', '-') }}
           path: ${{ matrix.service }}/trivy-dockerfile-report.html
           retention-days: 30
 
@@ -477,7 +477,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: sonarqube-python-${{ matrix.service }}
+          name: sonarqube-python-${{ matrix.service && replace(matrix.service, '/', '-') }}
           path: sonarqube-python-report.html
           retention-days: 30
 
@@ -513,7 +513,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: snyk-python-${{ matrix.service }}
+          name: snyk-python-${{ matrix.service && replace(matrix.service, '/', '-') }}
           path: snyk-python-report.html
           retention-days: 30
 

@@ -2,6 +2,7 @@
 # Docker Ignore File - Auth Service
 # =============================================================================
 
+
 # Git
 .git
 .gitignore

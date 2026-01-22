@@ -309,6 +309,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Make artifact name safe
+        id: artifact_name
+        run: |
+          safe_name="$(echo '${{ matrix.service }}' | tr '/\:*?"<>|\\' '-' )"
+          echo "safe=$safe_name" >> $GITHUB_OUTPUT
+      
+
       - name: Run Semgrep
         uses: returntocorp/semgrep-action@v1
         continue-on-error: true
@@ -329,7 +336,7 @@ jobs:
         if: always()
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: semgrep.sarif
+          sarif_file: ${{ matrix.service }}/semgrep.sarif #semgrep.sarif
           category: semgrep-${{ steps.artifact_name.outputs.safe }} #semgrep-${{ matrix.service }}
 
       - name: Generate Semgrep HTML Report
@@ -361,11 +368,6 @@ jobs:
           </body>
           </html>
           EOF
-      - name: Make artifact name safe
-        id: artifact_name
-        run: |
-          safe_name="$(echo '${{ matrix.service }}' | tr '/\:*?"<>|\\' '-' )"
-          echo "safe=$safe_name" >> $GITHUB_OUTPUT
 
       - name: Upload Semgrep Report
         if: always()

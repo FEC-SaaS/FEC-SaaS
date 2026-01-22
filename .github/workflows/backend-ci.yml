@@ -177,13 +177,28 @@ jobs:
           
           echo "</div></body></html>" >> bandit-report.html
 
+      # - name: Upload Bandit Report
+      #   if: always()
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: bandit-${{ matrix.service }}
+      #     path: ${{ matrix.service }}/bandit-report.html
+      #     retention-days: 30
+
+      - name: Make artifact name safe
+        id: artifact_name
+        run: |
+          safe_name="$(echo '${{ matrix.service }}' | tr '/\:*?"<>|\\' '-' )"
+          echo "safe=$safe_name" >> $GITHUB_OUTPUT
+
       - name: Upload Bandit Report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: bandit-${{ matrix.service && replace(matrix.service, '/', '-') }}
+          name: bandit-${{ steps.artifact_name.outputs.safe }}
           path: ${{ matrix.service }}/bandit-report.html
           retention-days: 30
+
 
   safety-dependency-check:
     name: Safety Dependency Check - ${{ matrix.service }}
@@ -266,11 +281,17 @@ jobs:
           
           echo "</div></body></html>" >> safety-report.html
 
+      - name: Make artifact name safe
+        id: artifact_name
+        run: |
+          safe_name="$(echo '${{ matrix.service }}' | tr '/\:*?"<>|\\' '-' )"
+          echo "safe=$safe_name" >> $GITHUB_OUTPUT
+
       - name: Upload Safety Report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: safety-${{ matrix.service && replace(matrix.service, '/', '-') }}
+          name: safety-${{ steps.artifact_name.outputs.safe }} #safety-${{ matrix.service }}
           path: ${{ matrix.service }}/safety-report.html
           retention-days: 30
 
@@ -339,12 +360,17 @@ jobs:
           </body>
           </html>
           EOF
+      - name: Make artifact name safe
+        id: artifact_name
+        run: |
+          safe_name="$(echo '${{ matrix.service }}' | tr '/\:*?"<>|\\' '-' )"
+          echo "safe=$safe_name" >> $GITHUB_OUTPUT
 
       - name: Upload Semgrep Report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: semgrep-${{ matrix.service && replace(matrix.service, '/', '-') }}
+          name: semgrep-${{ steps.artifact_name.outputs.safe }} #semgrep-${{ matrix.service }}
           path: ${{ matrix.service }}/semgrep-report.html
           retention-days: 30
 
@@ -390,11 +416,17 @@ jobs:
             --output /workspace/trivy-dockerfile-report.html \
             /workspace/Dockerfile || echo "<html><body><h1>Dockerfile scan complete</h1></body></html>" > ${{ matrix.service }}/trivy-dockerfile-report.html
 
+      - name: Make artifact name safe
+        id: artifact_name
+        run: |
+          safe_name="$(echo '${{ matrix.service }}' | tr '/\:*?"<>|\\' '-' )"
+          echo "safe=$safe_name" >> $GITHUB_OUTPUT
+
       - name: Upload Report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: trivy-dockerfile-${{ matrix.service && replace(matrix.service, '/', '-') }}
+          name: trivy-dockerfile-${{ matrix.service }}
           path: ${{ matrix.service }}/trivy-dockerfile-report.html
           retention-days: 30
 
@@ -473,11 +505,17 @@ jobs:
           </html>
           EOF
 
+      - name: Make artifact name safe
+        id: artifact_name
+        run: |
+          safe_name="$(echo '${{ matrix.service }}' | tr '/\:*?"<>|\\' '-' )"
+          echo "safe=$safe_name" >> $GITHUB_OUTPUT
+
       - name: Upload Report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: sonarqube-python-${{ matrix.service && replace(matrix.service, '/', '-') }}
+          name: sonarqube-python-${{ steps.artifact_name.outputs.safe }} #sonarqube-python-${{ matrix.service }}
           path: sonarqube-python-report.html
           retention-days: 30
 
@@ -509,11 +547,17 @@ jobs:
           npx snyk-to-html -i snyk-python.json -o snyk-python-report.html || \
           echo "<html><body><h1>Snyk Python Security Check Complete</h1><p>Service: ${{ matrix.service }}</p></body></html>" > snyk-python-report.html
 
+      - name: Make artifact name safe
+        id: artifact_name
+        run: |
+          safe_name="$(echo '${{ matrix.service }}' | tr '/\:*?"<>|\\' '-' )"
+          echo "safe=$safe_name" >> $GITHUB_OUTPUT
+
       - name: Upload Report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: snyk-python-${{ matrix.service && replace(matrix.service, '/', '-') }}
+          name: snyk-python-${{ steps.artifact_name.outputs.safe }} #snyk-python-${{ matrix.service }}
           path: snyk-python-report.html
           retention-days: 30
 

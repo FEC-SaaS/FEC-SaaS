@@ -320,6 +320,7 @@ jobs:
             p/flask
             p/fastapi
           generateSarif: true
+          sarif_file: semgrep.sarif
           scanPath: ${{ matrix.service }}
         env:
           SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
@@ -329,7 +330,7 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: semgrep.sarif
-          category: semgrep-${{ matrix.service }}
+          category: semgrep-${{ steps.artifact_name.outputs.safe }} #semgrep-${{ matrix.service }}
 
       - name: Generate Semgrep HTML Report
         if: always()
@@ -426,7 +427,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: trivy-dockerfile-${{ matrix.service }}
+          name: trivy-dockerfile-${{ steps.artifact_name.outputs.safe }} #trivy-dockerfile-${{ matrix.service }}
           path: ${{ matrix.service }}/trivy-dockerfile-report.html
           retention-days: 30
 

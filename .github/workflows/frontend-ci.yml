@@ -41,7 +41,7 @@ jobs:
     runs-on: ubuntu-latest
 
     environment:
-      name: ${{ github.ref_name }}
+      name: develop #${{ github.ref_name }}
 
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -264,7 +264,7 @@ jobs:
     if: needs.detect-changes.outputs.has-changes == 'true'
     runs-on: ubuntu-latest
     environment:
-      name: ${{ github.ref_name }}
+      name: develop #${{ github.ref_name }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}

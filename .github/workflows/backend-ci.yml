@@ -2,12 +2,12 @@ name: 'Backend Security Scan Pipeline (Dev)'
 
 on:
   push:
-    branches: [develop, dev]
+    branches: [develop, staging, main]
     paths:
       - 'services/**'
       - 'ai-services/**'
   pull_request:
-    branches: [develop, dev]
+    branches: [develop, staging, main]
     paths:
       - 'services/**'
       - 'ai-services/**'
@@ -29,6 +29,8 @@ jobs:
   detect-service-changes:
     name: Detect Changed Services
     runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.ref_name }}
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       has-changes: ${{ steps.set-matrix.outputs.has-changes }}
@@ -84,6 +86,8 @@ jobs:
     needs: detect-service-changes
     if: needs.detect-service-changes.outputs.has-changes == 'true'
     runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.ref_name }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.detect-service-changes.outputs.matrix) }}
@@ -186,6 +190,8 @@ jobs:
     needs: detect-service-changes
     if: needs.detect-service-changes.outputs.has-changes == 'true'
     runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.ref_name }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.detect-service-changes.outputs.matrix) }}
@@ -209,9 +215,14 @@ jobs:
         continue-on-error: true
         working-directory: ${{ matrix.service }}
         run: |
-          pip install -r requirements.txt || pip install poetry && poetry export -f requirements.txt --output requirements.txt
-          safety check --json --output safety-report.json || true
-          safety check --output safety-report.txt || true
+          # pip install -r requirements.txt || pip install poetry && poetry export -f requirements.txt --output requirements.txt
+          # safety check --json --output safety-report.json || true
+          # safety check --output safety-report.txt || true
+
+          pip install poetry safety
+          poetry export -f requirements.txt --output requirements.txt --without-hashes
+          safety check --file requirements.txt --json --output safety-report.json || true
+
 
       - name: Generate Safety HTML Report
         if: always()
@@ -268,6 +279,8 @@ jobs:
     needs: detect-service-changes
     if: needs.detect-service-changes.outputs.has-changes == 'true'
     runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.ref_name }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.detect-service-changes.outputs.matrix) }}
@@ -286,6 +299,7 @@ jobs:
             p/flask
             p/fastapi
           generateSarif: true
+          scanPath: ${{ matrix.service }}
         env:
           SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
 
@@ -339,6 +353,8 @@ jobs:
     needs: detect-service-changes
     if: needs.detect-service-changes.outputs.has-changes == 'true'
     runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.ref_name }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.detect-service-changes.outputs.matrix) }}
@@ -387,6 +403,8 @@ jobs:
     needs: detect-service-changes
     if: needs.detect-service-changes.outputs.has-changes == 'true'
     runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.ref_name }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.detect-service-changes.outputs.matrix) }}
@@ -410,15 +428,17 @@ jobs:
           pytest --cov=app --cov-report=xml:coverage.xml || true
 
       - name: SonarQube Scan
-        uses: sonarsource/sonarqube-scan-action@master
+        uses: SonarSource/sonarqube-scan-action@v6
+
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         with:
           projectBaseDir: ${{ matrix.service }}
           args: >
-            -Dsonar.projectKey=fec-saas-${{ matrix.service }}
-            -Dsonar.projectName=FEC-SaaS-${{ matrix.service }}
+            -Dsonar.organization=fec-saas
+            -Dsonar.projectKey=FEC-SaaS_FEC-SaaS
+            -Dsonar.projectName=FEC-SaaS
             -Dsonar.python.coverage.reportPaths=coverage.xml
             -Dsonar.sources=app
             -Dsonar.tests=tests
@@ -427,7 +447,7 @@ jobs:
       - name: Fetch & Generate SonarQube Report
         if: always()
         run: |
-          PROJECT_KEY=fec-saas-${{ matrix.service }}
+          PROJECT_KEY=FEC-SaaS_FEC-SaaS
           curl -u ${{ secrets.SONAR_TOKEN }}: \
             "${{ secrets.SONAR_HOST_URL }}/api/issues/search?componentKeys=$PROJECT_KEY&ps=500" \
             -o sonarqube-python.json
@@ -466,6 +486,8 @@ jobs:
     needs: detect-service-changes
     if: needs.detect-service-changes.outputs.has-changes == 'true'
     runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.ref_name }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.detect-service-changes.outputs.matrix) }}
@@ -500,6 +522,8 @@ jobs:
     needs: [detect-service-changes, bandit-security-scan, safety-dependency-check, semgrep-scan, trivy-dockerfile-scan, sonarqube-python, snyk-python-scan]
     if: always() && needs.detect-service-changes.outputs.has-changes == 'true'
     runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.ref_name }}
     steps:
       - name: Download All Reports
         uses: actions/download-artifact@v4
@@ -584,8 +608,12 @@ jobs:
   create-security-issue-backend:
     name: Create Security Issue for Backend
     needs: [detect-service-changes, bandit-security-scan, safety-dependency-check, semgrep-scan]
-    if: failure()
+    #if: failure()
+    if: failure() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+
     runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.ref_name }}
     steps:
       - name: Create Issue
         uses: actions/github-script@v7

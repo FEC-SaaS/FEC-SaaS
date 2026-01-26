@@ -477,9 +477,20 @@ jobs:
           pip install -r requirements.txt || true
           pytest --cov=app --cov-report=xml:coverage.xml || true
 
+      - name: Check if tests directory exists
+        id: check-tests
+        working-directory: ${{ matrix.service }}
+        run: |
+          if [ -d "tests" ]; then
+            echo "has-tests=true" >> $GITHUB_OUTPUT
+            echo "tests-arg=-Dsonar.tests=tests" >> $GITHUB_OUTPUT
+          else
+            echo "has-tests=false" >> $GITHUB_OUTPUT
+            echo "tests-arg=" >> $GITHUB_OUTPUT
+          fi
+      
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v6
-
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
@@ -490,9 +501,10 @@ jobs:
             -Dsonar.projectKey=FEC-SaaS_FEC-SaaS
             -Dsonar.projectName=FEC-SaaS
             -Dsonar.python.coverage.reportPaths=coverage.xml
-            -Dsonar.sources=app
-            -Dsonar.tests=tests
-            -Dsonar.language=py
+            -Dsonar.sources=app${{ steps.check-tests.outputs.tests-config }}
+            
+      # -Dsonar.tests=tests
+      # -Dsonar.language=py
 
       - name: Fetch & Generate SonarQube Report
         if: always()

@@ -1,18 +1,45 @@
-"""Auth API endpoints for user authentication and management.
+"""
+=============================================================================
+FILE: auth.py (API endpoints)
+PURPOSE: Core authentication REST API endpoints
+=============================================================================
 
-Implements all authentication flows with production security features:
+This module implements all authentication flows for the FEC SaaS platform:
+- User registration with email verification
+- Login with account lockout protection
+- JWT token management with rotation
+- Password reset flow
+- Email and phone verification
+- User profile management
+- GDPR compliance (data export, account deletion)
+
+SECURITY FEATURES:
 - Rate limiting on sensitive endpoints
-- Account lockout after failed attempts
+- Account lockout after failed login attempts
 - Token blacklisting with Redis
 - Refresh token rotation
-- Audit logging for security events
-- Request ID tracing
+- Audit logging for all security events
+- Request ID tracing for debugging
+
+ENDPOINTS:
+- POST /auth/register - Create new account
+- POST /auth/login - Authenticate user
+- POST /auth/refresh - Refresh access token
+- POST /auth/logout - Invalidate session
+- POST /auth/forgot-password - Request password reset
+- POST /auth/reset-password - Complete password reset
+- POST /auth/verify-email - Verify email address
+- GET  /auth/me - Get current user profile
+- PUT  /auth/me - Update user profile
+- And more...
+
+=============================================================================
 """
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
@@ -55,6 +82,7 @@ from app.schemas.user import UserCreate, UserPublic, UserUpdate
 from app.services.account_lockout import AccountLockoutService
 from app.services.audit_log import AuditLogService, AuditEventType
 from app.services.token_blacklist import TokenBlacklistService
+from app.services.notification_client import notification_client
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 settings = get_settings()
@@ -157,9 +185,10 @@ def _create_session(
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit(get_rate_limit("register"))
-def register(
+async def register(
     request: Request,
     payload: UserCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
     """Register a new user account."""
@@ -208,6 +237,15 @@ def register(
 
     # Audit log
     AuditLogService.log_registration(str(user.id), user.email, ip_address)
+
+    # Send verification email in background (non-blocking)
+    background_tasks.add_task(
+        notification_client.send_email_verification,
+        user_id=str(user.id),
+        email=user.email,
+        first_name=user.first_name or "",
+        verification_token=verification_token.token,
+    )
 
     tokens = TokenPair(
         access_token=access_token,
@@ -453,9 +491,10 @@ def logout_all(
 
 @router.post("/forgot-password", response_model=MessageResponse)
 @limiter.limit(get_rate_limit("password_reset"))
-def forgot_password(
+async def forgot_password(
     request: Request,
     payload: ForgotPasswordRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
     """Request a password reset email."""
@@ -488,7 +527,14 @@ def forgot_password(
             ip_address=ip_address,
         )
 
-        # TODO: Send password reset email via notification service
+        # Send password reset email in background
+        background_tasks.add_task(
+            notification_client.send_password_reset,
+            user_id=str(user.id),
+            email=user.email,
+            first_name=user.first_name or "",
+            reset_token=reset_token.token,
+        )
 
     return MessageResponse(
         message="If an account exists with this email, a password reset link has been sent."
@@ -609,9 +655,10 @@ def verify_email(
 
 @router.post("/resend-verification", response_model=MessageResponse)
 @limiter.limit(get_rate_limit("verify_email"))
-def resend_verification(
+async def resend_verification(
     request: Request,
     payload: ResendVerificationRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
     """Resend email verification link."""
@@ -635,7 +682,14 @@ def resend_verification(
         db.add(verification_token)
         db.commit()
 
-        # TODO: Send verification email via notification service
+        # Send verification email in background
+        background_tasks.add_task(
+            notification_client.send_email_verification,
+            user_id=str(user.id),
+            email=user.email,
+            first_name=user.first_name or "",
+            verification_token=verification_token.token,
+        )
 
     return MessageResponse(
         message="If an unverified account exists, a verification email has been sent."
@@ -771,9 +825,10 @@ def update_me(
 
 @router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit("3/minute")
-def change_password(
+async def change_password(
     request: Request,
     payload: ChangePasswordRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -796,6 +851,14 @@ def change_password(
 
     # Audit log
     AuditLogService.log_password_change(str(current_user.id), ip_address)
+
+    # Send password changed notification in background
+    background_tasks.add_task(
+        notification_client.send_password_changed,
+        user_id=str(current_user.id),
+        email=current_user.email,
+        first_name=current_user.first_name or "",
+    )
 
     return None
 

@@ -65,10 +65,28 @@ class Settings(BaseSettings):
     # Social Auth (optional - configure for OAuth)
     GOOGLE_CLIENT_ID: str | None = None
     GOOGLE_CLIENT_SECRET: str | None = None
+    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/social/google/callback"
     FACEBOOK_APP_ID: str | None = None
     FACEBOOK_APP_SECRET: str | None = None
+    FACEBOOK_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/social/facebook/callback"
     APPLE_CLIENT_ID: str | None = None
     APPLE_TEAM_ID: str | None = None
+    APPLE_KEY_ID: str | None = None
+    APPLE_PRIVATE_KEY: str | None = None
+
+    # Notification Service Integration
+    NOTIFICATION_SERVICE_URL: str = "http://localhost:8001"
+    NOTIFICATION_SERVICE_TIMEOUT: int = 10
+
+    # MFA/2FA Settings
+    MFA_ISSUER_NAME: str = "FEC SaaS"
+    MFA_CODE_VALIDITY_SECONDS: int = 30
+    MFA_BACKUP_CODES_COUNT: int = 10
+
+    # Frontend URLs for email links
+    FRONTEND_URL: str = "http://localhost:3000"
+    EMAIL_VERIFICATION_URL: str = "{frontend_url}/verify-email?token={token}"
+    PASSWORD_RESET_URL: str = "{frontend_url}/reset-password?token={token}"
 
 
 @lru_cache()

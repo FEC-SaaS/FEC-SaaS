@@ -1,0 +1,68 @@
+# =============================================================================
+# Docker Compose for FEC Venue Service (Development)
+# =============================================================================
+
+version: "3.9"
+
+services:
+  venue-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: fec-venue-service
+    ports:
+      - "8002:8002"
+    environment:
+      - APP_NAME=FEC Venue Service
+      - DEBUG=true
+      - PORT=8002
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@venue-db:5432/fec_venue
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-dev-secret-key}
+      - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001,http://localhost:8080
+      - REDIS_URL=redis://venue-redis:6379/0
+    depends_on:
+      venue-db:
+        condition: service_healthy
+      venue-redis:
+        condition: service_started
+    networks:
+      - fec-network
+    restart: unless-stopped
+
+  venue-db:
+    image: postgres:15-alpine
+    container_name: fec-venue-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=fec_venue
+    ports:
+      - "5434:5432"
+    volumes:
+      - venue-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fec-network
+
+  venue-redis:
+    image: redis:7-alpine
+    container_name: fec-venue-redis
+    ports:
+      - "6381:6379"
+    volumes:
+      - venue-redis-data:/data
+    networks:
+      - fec-network
+
+volumes:
+  venue-db-data:
+  venue-redis-data:
+
+networks:
+  fec-network:
+    external: true

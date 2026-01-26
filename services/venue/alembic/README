@@ -1,0 +1,112 @@
+FEC Venue Service - Database Migrations
+=======================================
+
+This directory contains Alembic database migrations for the Venue Service.
+
+Directory Structure
+-------------------
+alembic/
+├── env.py              # Alembic environment configuration
+├── script.py.mako      # Migration template
+├── versions/           # Migration files
+│   └── *.py           # Individual migrations
+└── README              # This file
+
+
+Quick Start
+-----------
+
+1. Create a new migration:
+   ```bash
+   poetry run alembic revision --autogenerate -m "description"
+   ```
+
+2. Apply all pending migrations:
+   ```bash
+   poetry run alembic upgrade head
+   ```
+
+3. Rollback one migration:
+   ```bash
+   poetry run alembic downgrade -1
+   ```
+
+4. Show current revision:
+   ```bash
+   poetry run alembic current
+   ```
+
+5. Show migration history:
+   ```bash
+   poetry run alembic history
+   ```
+
+
+Common Commands
+---------------
+
+# Upgrade to specific revision
+poetry run alembic upgrade <revision>
+
+# Downgrade to specific revision
+poetry run alembic downgrade <revision>
+
+# Show SQL without executing
+poetry run alembic upgrade head --sql
+
+# Create empty migration (manual)
+poetry run alembic revision -m "description"
+
+# Mark migration as applied without running
+poetry run alembic stamp <revision>
+
+
+Best Practices
+--------------
+
+1. Always review auto-generated migrations before applying
+2. Test migrations on a copy of production data first
+3. Include both upgrade() and downgrade() functions
+4. Keep migrations small and focused
+5. Use meaningful migration descriptions
+6. Never modify applied migrations in production
+
+
+Database Models
+---------------
+
+The Venue Service uses the following models:
+
+- Venue: Core venue entity
+- VenueHours: Regular operating hours
+- VenueSpecialHours: Holiday/event hours
+- VenueSetting: Key-value configuration
+- VenueFeature: Feature flags
+- VenueAIConfig: AI service configuration
+- VenuePerformance: Performance metrics
+- VenueContact: Staff contacts
+- VenueImage: Media/images
+
+
+Environment Variables
+---------------------
+
+DATABASE_URL: PostgreSQL connection string
+  Format: postgresql+asyncpg://user:pass@host:port/dbname
+  Default: postgresql+asyncpg://postgres:postgres@localhost:5432/fec_venue
+
+
+Troubleshooting
+---------------
+
+1. "Target database is not up to date"
+   Run: poetry run alembic upgrade head
+
+2. "Can't locate revision"
+   Check if revision exists: poetry run alembic history
+
+3. "Multiple heads"
+   Merge heads: poetry run alembic merge heads -m "merge"
+
+4. "Table already exists"
+   Mark as applied: poetry run alembic stamp head

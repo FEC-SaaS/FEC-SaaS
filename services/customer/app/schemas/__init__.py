@@ -1,0 +1,91 @@
+"""Customer Service schemas."""
+
+from app.schemas.customer import (
+    # Common
+    PaginationParams,
+    # Customer schemas
+    CustomerBase,
+    CustomerCreate,
+    CustomerUpdate,
+    CustomerResponse,
+    CustomerDetailResponse,
+    CustomerListResponse,
+    CustomerSearch,
+    # Family schemas
+    FamilyBase,
+    FamilyCreate,
+    FamilyUpdate,
+    FamilyResponse,
+    FamilyMemberCreate,
+    FamilyMemberResponse,
+    # Visit schemas
+    VisitBase,
+    VisitCreate,
+    VisitUpdate,
+    VisitCheckout,
+    VisitResponse,
+    VisitDetailResponse,
+    VisitListResponse,
+    # Activity schemas
+    ActivityBase,
+    ActivityCreate,
+    ActivityResponse,
+    # Segment schemas
+    SegmentResponse,
+    SegmentAssignment,
+    # LTV schemas
+    LTVResponse,
+    LTVCalculation,
+    # Churn schemas
+    ChurnRiskResponse,
+    ChurnRiskCalculation,
+    # Preference schemas
+    PreferenceBase,
+    PreferenceCreate,
+    PreferenceResponse,
+    # Analytics schemas
+    CustomerAnalytics,
+    SegmentStats,
+    ChurnStats,
+    VisitStats,
+)
+
+__all__ = [
+    "PaginationParams",
+    "CustomerBase",
+    "CustomerCreate",
+    "CustomerUpdate",
+    "CustomerResponse",
+    "CustomerDetailResponse",
+    "CustomerListResponse",
+    "CustomerSearch",
+    "FamilyBase",
+    "FamilyCreate",
+    "FamilyUpdate",
+    "FamilyResponse",
+    "FamilyMemberCreate",
+    "FamilyMemberResponse",
+    "VisitBase",
+    "VisitCreate",
+    "VisitUpdate",
+    "VisitCheckout",
+    "VisitResponse",
+    "VisitDetailResponse",
+    "VisitListResponse",
+    "ActivityBase",
+    "ActivityCreate",
+    "ActivityResponse",
+    "SegmentResponse",
+    "SegmentAssignment",
+    "LTVResponse",
+    "LTVCalculation",
+    "ChurnRiskResponse",
+    "ChurnRiskCalculation",
+    "PreferenceBase",
+    "PreferenceCreate",
+    "PreferenceResponse",
+    "CustomerAnalytics",
+    "SegmentStats",
+    "ChurnStats",
+    "VisitStats",
+]

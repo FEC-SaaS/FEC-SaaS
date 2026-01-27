@@ -129,9 +129,20 @@ app = FastAPI(
     ### Services
     - `/api/v1/auth/*` - Authentication Service
     - `/api/v1/notifications/*` - Notification Service
+    - `/api/v1/templates/*` - Notification Service (templates)
     - `/api/v1/venues/*` - Venue Management Service
     - `/api/v1/parties/*` - Party Booking Service
     - `/api/v1/customers/*` - Customer Service
+    - `/api/v1/families/*` - Customer Service (family groups)
+    - `/api/v1/visits/*` - Customer Service (visit tracking)
+    - `/api/v1/segments/*` - Customer Service (segmentation)
+    - `/api/v1/membership/*` - Membership Service (subscriptions, loyalty, rewards, family, corporate, referrals, tiers, analytics)
+    - `/api/v1/bookings/*` - Booking Service
+    - `/api/v1/payments/*` - Payment Service
+    - `/api/v1/payment-methods/*` - Payment Gateway (payment methods)
+    - `/api/v1/fraud/*` - Payment Gateway (fraud detection)
+    - `/api/v1/disputes/*` - Payment Gateway (disputes)
+    - `/api/v1/analytics/*` - Analytics Service
     """,
     version=settings.VERSION,
     docs_url="/docs" if settings.DEBUG else None,
@@ -221,25 +232,29 @@ async def readiness_check(request: Request):
     """
     checks = {}
 
-    # Check Auth Service
-    try:
-        response = await request.app.state.http_client.get(
-            f"{settings.AUTH_SERVICE_URL}/api/v1/auth/health",
-            timeout=5.0,
-        )
-        checks["auth_service"] = response.status_code == 200
-    except Exception:
-        checks["auth_service"] = False
+    # Service health check configuration: (name, url, health_path)
+    service_checks = [
+        ("auth_service", settings.AUTH_SERVICE_URL, "/api/v1/auth/health"),
+        ("notification_service", settings.NOTIFICATION_SERVICE_URL, "/api/v1/notifications/health"),
+        ("venue_service", settings.VENUE_SERVICE_URL, "/health"),
+        ("party_service", settings.PARTY_SERVICE_URL, "/health"),
+        ("customer_service", settings.CUSTOMER_SERVICE_URL, "/health"),
+        ("membership_service", settings.MEMBERSHIP_SERVICE_URL, "/health"),
+        ("booking_service", settings.BOOKING_SERVICE_URL, "/health"),
+        ("payment_service", settings.PAYMENT_SERVICE_URL, "/health"),
+        ("payment_gateway", settings.PAYMENT_GATEWAY_SERVICE_URL, "/health"),
+        ("analytics_service", settings.ANALYTICS_SERVICE_URL, "/health"),
+    ]
 
-    # Check Notification Service
-    try:
-        response = await request.app.state.http_client.get(
-            f"{settings.NOTIFICATION_SERVICE_URL}/api/v1/notifications/health",
-            timeout=5.0,
-        )
-        checks["notification_service"] = response.status_code == 200
-    except Exception:
-        checks["notification_service"] = False
+    for service_name, service_url, health_path in service_checks:
+        try:
+            response = await request.app.state.http_client.get(
+                f"{service_url}{health_path}",
+                timeout=5.0,
+            )
+            checks[service_name] = response.status_code == 200
+        except Exception:
+            checks[service_name] = False
 
     all_healthy = all(checks.values())
 

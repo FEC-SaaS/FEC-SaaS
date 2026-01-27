@@ -66,9 +66,11 @@ class Settings(BaseSettings):
     VENUE_SERVICE_URL: str = "http://localhost:8002"
     PARTY_SERVICE_URL: str = "http://localhost:8003"
     CUSTOMER_SERVICE_URL: str = "http://localhost:8004"
-    BOOKING_SERVICE_URL: str = "http://localhost:8005"
-    PAYMENT_SERVICE_URL: str = "http://localhost:8006"
-    ANALYTICS_SERVICE_URL: str = "http://localhost:8007"
+    MEMBERSHIP_SERVICE_URL: str = "http://localhost:8005"
+    BOOKING_SERVICE_URL: str = "http://localhost:8006"
+    PAYMENT_SERVICE_URL: str = "http://localhost:8007"
+    PAYMENT_GATEWAY_SERVICE_URL: str = "http://localhost:8010"
+    ANALYTICS_SERVICE_URL: str = "http://localhost:8008"
 
     # ==========================================================================
     # Authentication Settings
@@ -150,11 +152,19 @@ def get_settings() -> Settings:
 SERVICE_ROUTES = {
     "/api/v1/auth": "AUTH_SERVICE_URL",
     "/api/v1/notifications": "NOTIFICATION_SERVICE_URL",
+    "/api/v1/templates": "NOTIFICATION_SERVICE_URL",
     "/api/v1/venues": "VENUE_SERVICE_URL",
     "/api/v1/parties": "PARTY_SERVICE_URL",
     "/api/v1/customers": "CUSTOMER_SERVICE_URL",
+    "/api/v1/families": "CUSTOMER_SERVICE_URL",
+    "/api/v1/visits": "CUSTOMER_SERVICE_URL",
+    "/api/v1/segments": "CUSTOMER_SERVICE_URL",
+    "/api/v1/membership": "MEMBERSHIP_SERVICE_URL",
     "/api/v1/bookings": "BOOKING_SERVICE_URL",
     "/api/v1/payments": "PAYMENT_SERVICE_URL",
+    "/api/v1/payment-methods": "PAYMENT_GATEWAY_SERVICE_URL",
+    "/api/v1/fraud": "PAYMENT_GATEWAY_SERVICE_URL",
+    "/api/v1/disputes": "PAYMENT_GATEWAY_SERVICE_URL",
     "/api/v1/analytics": "ANALYTICS_SERVICE_URL",
 }
 

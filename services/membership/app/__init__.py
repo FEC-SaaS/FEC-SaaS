@@ -1,0 +1,1 @@
+"""Membership Service application package."""

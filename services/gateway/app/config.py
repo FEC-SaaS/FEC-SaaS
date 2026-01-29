@@ -71,6 +71,11 @@ class Settings(BaseSettings):
     PAYMENT_SERVICE_URL: str = "http://localhost:8007"
     PAYMENT_GATEWAY_SERVICE_URL: str = "http://localhost:8010"
     ANALYTICS_SERVICE_URL: str = "http://localhost:8008"
+    RESTAURANT_SERVICE_URL: str = "http://localhost:8009"
+    RESERVATION_CAPACITY_SERVICE_URL: str = "http://localhost:8012"
+    BOWLING_SERVICE_URL: str = "http://localhost:8013"
+    POS_SERVICE_URL: str = "http://localhost:8014"
+    STAFF_SERVICE_URL: str = "http://localhost:8015"
 
     # ==========================================================================
     # Authentication Settings
@@ -166,6 +171,18 @@ SERVICE_ROUTES = {
     "/api/v1/fraud": "PAYMENT_GATEWAY_SERVICE_URL",
     "/api/v1/disputes": "PAYMENT_GATEWAY_SERVICE_URL",
     "/api/v1/analytics": "ANALYTICS_SERVICE_URL",
+    "/api/v1/restaurant": "RESTAURANT_SERVICE_URL",
+    "/api/v1/reservations": "RESERVATION_CAPACITY_SERVICE_URL",
+    "/api/v1/availability": "RESERVATION_CAPACITY_SERVICE_URL",
+    "/api/v1/capacity": "RESERVATION_CAPACITY_SERVICE_URL",
+    "/api/v1/waitlist": "RESERVATION_CAPACITY_SERVICE_URL",
+    "/api/v1/reminders": "RESERVATION_CAPACITY_SERVICE_URL",
+    "/api/v1/no-shows": "RESERVATION_CAPACITY_SERVICE_URL",
+    "/api/v1/overbooking": "RESERVATION_CAPACITY_SERVICE_URL",
+    "/api/v1/reservation-analytics": "RESERVATION_CAPACITY_SERVICE_URL",
+    "/api/v1/bowling": "BOWLING_SERVICE_URL",
+    "/api/v1/pos": "POS_SERVICE_URL",
+    "/api/v1/staff": "STAFF_SERVICE_URL",
 }
 
 

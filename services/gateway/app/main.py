@@ -143,6 +143,16 @@ app = FastAPI(
     - `/api/v1/fraud/*` - Payment Gateway (fraud detection)
     - `/api/v1/disputes/*` - Payment Gateway (disputes)
     - `/api/v1/analytics/*` - Analytics Service
+    - `/api/v1/reservations/*` - Reservation & Capacity Service
+    - `/api/v1/availability/*` - Reservation & Capacity Service
+    - `/api/v1/capacity/*` - Reservation & Capacity Service
+    - `/api/v1/waitlist/*` - Reservation & Capacity Service
+    - `/api/v1/reminders/*` - Reservation & Capacity Service
+    - `/api/v1/no-shows/*` - Reservation & Capacity Service
+    - `/api/v1/overbooking/*` - Reservation & Capacity Service
+    - `/api/v1/reservation-analytics/*` - Reservation & Capacity Service
+    - `/api/v1/bowling/*` - Bowling Management Service
+    - `/api/v1/pos/*` - POS Integration Service (transactions, payments, receipts, refunds, cash drawers, tax, reconciliation, external POS)
     """,
     version=settings.VERSION,
     docs_url="/docs" if settings.DEBUG else None,
@@ -244,6 +254,9 @@ async def readiness_check(request: Request):
         ("payment_service", settings.PAYMENT_SERVICE_URL, "/health"),
         ("payment_gateway", settings.PAYMENT_GATEWAY_SERVICE_URL, "/health"),
         ("analytics_service", settings.ANALYTICS_SERVICE_URL, "/health"),
+        ("reservation_capacity_service", settings.RESERVATION_CAPACITY_SERVICE_URL, "/health"),
+        ("bowling_service", settings.BOWLING_SERVICE_URL, "/health"),
+        ("pos_service", settings.POS_SERVICE_URL, "/health"),
     ]
 
     for service_name, service_url, health_path in service_checks:

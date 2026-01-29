@@ -33,6 +33,10 @@ ROUTE MAPPING:
 - /api/v1/fraud/* → Payment Gateway (fraud detection)
 - /api/v1/disputes/* → Payment Gateway (disputes/chargebacks)
 - /api/v1/analytics/* → Analytics Service
+- /api/v1/restaurant/* → Restaurant Service (tables, reservations, menu,
+                          orders, KDS, bar, waste, digital menus)
+- /api/v1/staff/* → Staff & Scheduling Service (profiles, roles, shifts,
+                     time clock, availability, time off, swaps, payroll, analytics)
 
 USAGE:
     # Routes are automatically included in main.py
@@ -614,6 +618,423 @@ async def analytics_proxy(request: Request, path: str):
         request,
         settings.ANALYTICS_SERVICE_URL,
         f"/api/v1/analytics/{path}",
+    )
+
+
+# =============================================================================
+# Restaurant Service Routes
+# =============================================================================
+@router.api_route(
+    "/api/v1/restaurant/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    tags=["Restaurant Service"],
+)
+async def restaurant_proxy(request: Request, path: str):
+    """
+    Proxy requests to the Restaurant Service.
+
+    Handles all restaurant/food & beverage endpoints including:
+
+    **Tables & Sections** (`/api/v1/restaurant/sections`, `/api/v1/restaurant/tables`):
+    - Section CRUD (dining room, bar, patio, private)
+    - Table management and status tracking
+    - Table availability queries
+
+    **Reservations** (`/api/v1/restaurant/reservations`):
+    - Create and manage table reservations
+    - Seat and complete reservations
+
+    **Menu** (`/api/v1/restaurant/menu`):
+    - Full menu retrieval with categories and items
+    - Menu item CRUD with allergens, dietary tags, pricing
+    - Menu modifiers and availability toggling
+    - Menu categories with meal time scheduling
+
+    **Orders** (`/api/v1/restaurant/orders`):
+    - Create orders (dine-in, takeout, delivery, curbside)
+    - Order status management (pending → preparing → ready → served)
+    - Add items to existing orders
+
+    **Kitchen Display System** (`/api/v1/restaurant/kds`):
+    - KDS queue management per station
+    - Start and complete kitchen items
+    - Station configuration
+
+    **Bar** (`/api/v1/restaurant/bar`):
+    - Bar inventory management
+    - Pour tracking with inventory deduction
+    - Low stock alerts
+
+    **Waste** (`/api/v1/restaurant/waste`):
+    - Food waste logging
+    - Waste analytics (by reason, top wasted items, cost)
+
+    **Digital Menu & Happy Hours** (`/api/v1/restaurant/digital-menu`, `/api/v1/restaurant/happy-hours`):
+    - Digital menu board configuration
+    - Happy hour schedule management
+    """
+    return await proxy_request(
+        request,
+        settings.RESTAURANT_SERVICE_URL,
+        f"/api/v1/restaurant/{path}",
+    )
+
+
+# =============================================================================
+# Reservation & Capacity Service Routes
+# =============================================================================
+@router.api_route(
+    "/api/v1/reservations/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    tags=["Reservation & Capacity Service"],
+)
+async def reservations_proxy(request: Request, path: str):
+    """
+    Proxy requests to the Reservation & Capacity Service – Reservations.
+
+    Handles reservation lifecycle:
+    - CRUD operations for reservations (bowling, mini golf, food, party, multi-activity)
+    - Check-in, complete, confirm, cancel, no-show marking
+    - Confirmation code lookup
+    """
+    return await proxy_request(
+        request,
+        settings.RESERVATION_CAPACITY_SERVICE_URL,
+        f"/api/v1/reservations/{path}",
+    )
+
+
+@router.api_route(
+    "/api/v1/availability/{path:path}",
+    methods=["GET", "POST", "DELETE"],
+    tags=["Reservation & Capacity Service"],
+)
+async def availability_proxy(request: Request, path: str):
+    """
+    Proxy requests to the Reservation & Capacity Service – Availability.
+
+    Handles time-slot availability:
+    - Query available slots by venue, resource type, and date
+    - Temporary time-slot holds (5-min expiry)
+    - Real-time availability checks
+    """
+    return await proxy_request(
+        request,
+        settings.RESERVATION_CAPACITY_SERVICE_URL,
+        f"/api/v1/availability/{path}",
+    )
+
+
+@router.api_route(
+    "/api/v1/capacity/{path:path}",
+    methods=["GET", "POST", "PUT"],
+    tags=["Reservation & Capacity Service"],
+)
+async def capacity_proxy(request: Request, path: str):
+    """
+    Proxy requests to the Reservation & Capacity Service – Capacity.
+
+    Handles capacity configuration and monitoring:
+    - Capacity config per venue + resource type
+    - Real-time capacity dashboard
+    - Capacity forecasting
+    """
+    return await proxy_request(
+        request,
+        settings.RESERVATION_CAPACITY_SERVICE_URL,
+        f"/api/v1/capacity/{path}",
+    )
+
+
+@router.api_route(
+    "/api/v1/waitlist/{path:path}",
+    methods=["GET", "POST", "PUT", "DELETE"],
+    tags=["Reservation & Capacity Service"],
+)
+async def waitlist_proxy(request: Request, path: str):
+    """
+    Proxy requests to the Reservation & Capacity Service – Waitlist.
+
+    Handles waitlist management:
+    - Add customers to waitlist with priority
+    - Notify waitlisted customers when slots open
+    - Convert waitlist entries to reservations
+    """
+    return await proxy_request(
+        request,
+        settings.RESERVATION_CAPACITY_SERVICE_URL,
+        f"/api/v1/waitlist/{path}",
+    )
+
+
+@router.api_route(
+    "/api/v1/reminders/{path:path}",
+    methods=["GET", "POST"],
+    tags=["Reservation & Capacity Service"],
+)
+async def reminders_proxy(request: Request, path: str):
+    """
+    Proxy requests to the Reservation & Capacity Service – Reminders.
+
+    Handles reservation reminders:
+    - Schedule confirmation, 24-hour, and 1-hour reminders
+    - Send via email, SMS, or push
+    - Process pending reminder batches
+    """
+    return await proxy_request(
+        request,
+        settings.RESERVATION_CAPACITY_SERVICE_URL,
+        f"/api/v1/reminders/{path}",
+    )
+
+
+@router.api_route(
+    "/api/v1/no-shows/{path:path}",
+    methods=["GET"],
+    tags=["Reservation & Capacity Service"],
+)
+async def no_shows_proxy(request: Request, path: str):
+    """
+    Proxy requests to the Reservation & Capacity Service – No-Shows.
+
+    Handles no-show tracking and customer reliability:
+    - No-show history by venue
+    - Customer no-show history
+    - Customer reliability scores
+    """
+    return await proxy_request(
+        request,
+        settings.RESERVATION_CAPACITY_SERVICE_URL,
+        f"/api/v1/no-shows/{path}",
+    )
+
+
+@router.api_route(
+    "/api/v1/overbooking/{path:path}",
+    methods=["GET", "POST"],
+    tags=["Reservation & Capacity Service"],
+)
+async def overbooking_proxy(request: Request, path: str):
+    """
+    Proxy requests to the Reservation & Capacity Service – Overbooking.
+
+    Handles overbooking optimization:
+    - Overbooking rules per venue/resource/time period
+    - Historical no-show rate analysis
+    - Recommended overbooking rate forecasting
+    """
+    return await proxy_request(
+        request,
+        settings.RESERVATION_CAPACITY_SERVICE_URL,
+        f"/api/v1/overbooking/{path}",
+    )
+
+
+@router.api_route(
+    "/api/v1/reservation-analytics/{path:path}",
+    methods=["GET"],
+    tags=["Reservation & Capacity Service"],
+)
+async def reservation_analytics_proxy(request: Request, path: str):
+    """
+    Proxy requests to the Reservation & Capacity Service – Analytics.
+
+    Handles reservation-specific analytics:
+    - Utilization rates by resource type
+    - No-show analysis and trends
+    - Revenue impact metrics
+    - Booking channel performance
+    """
+    return await proxy_request(
+        request,
+        settings.RESERVATION_CAPACITY_SERVICE_URL,
+        f"/api/v1/reservation-analytics/{path}",
+    )
+
+
+# =============================================================================
+# Bowling Management Service Routes
+# =============================================================================
+@router.api_route(
+    "/api/v1/bowling/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    tags=["Bowling Service"],
+)
+async def bowling_proxy(request: Request, path: str):
+    """
+    Proxy requests to the Bowling Management Service.
+
+    Handles all bowling-related endpoints including:
+
+    **Lanes** (`/api/v1/bowling/lanes`):
+    - Lane inventory and real-time status tracking
+    - Lane availability queries by date and type
+    - Lane status management (available, occupied, maintenance, offline)
+
+    **Reservations** (`/api/v1/bowling/reservations`):
+    - Lane reservation CRUD with time-slot conflict detection
+    - Check-in, completion, cancellation, and no-show tracking
+    - Dynamic pricing per lane, per time slot
+
+    **Sessions** (`/api/v1/bowling/sessions`):
+    - Active session tracking with scoring data
+    - Game count and duration tracking
+    - Player scores with frame-by-frame data
+
+    **Shoes** (`/api/v1/bowling/shoes`):
+    - Shoe rental and return management
+    - Real-time shoe inventory tracking per venue and size
+    - Low-stock alerts
+
+    **Maintenance** (`/api/v1/bowling/maintenance`):
+    - Preventive maintenance scheduling per lane
+    - Maintenance lifecycle (scheduled → in-progress → completed)
+    - Overdue maintenance tracking
+
+    **Analytics** (`/api/v1/bowling/analytics`):
+    - Lane utilization statistics
+    - Revenue analytics by lane and date range
+    - Peak-time heatmap data
+    """
+    return await proxy_request(
+        request,
+        settings.BOWLING_SERVICE_URL,
+        f"/api/v1/bowling/{path}",
+    )
+
+
+# =============================================================================
+# POS Integration Service Routes
+# =============================================================================
+@router.api_route(
+    "/api/v1/pos/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    tags=["POS Service"],
+)
+async def pos_proxy(request: Request, path: str):
+    """
+    Proxy requests to the POS Integration Service.
+
+    Handles all point-of-sale and transaction-related endpoints including:
+
+    **Transactions** (`/api/v1/pos/transactions`):
+    - Universal transaction logging across all activities
+    - Transaction lifecycle: PENDING -> COMPLETED / VOIDED
+    - Multi-activity support (bowling, arcade, food, party, membership, retail)
+
+    **Payments** (`/api/v1/pos/payments`):
+    - Multi-tender payment processing (cash, card, game card, gift card)
+    - Payment reversals and processor integration
+    - Payment method analytics
+
+    **Receipts** (`/api/v1/pos/receipts`):
+    - Digital receipt generation and management
+    - Email and print support
+
+    **Refunds** (`/api/v1/pos/refunds`):
+    - Approval-based refund workflow
+    - Full and partial refund support
+
+    **Cash Drawers** (`/api/v1/pos/cash-drawers`):
+    - Cash drawer open/close lifecycle
+    - Cash drop tracking and variance detection
+
+    **Tax Rates** (`/api/v1/pos/tax-rates`):
+    - Jurisdiction-based tax configuration
+    - Real-time tax calculation
+
+    **Reconciliation** (`/api/v1/pos/reconciliation`):
+    - Automated daily reconciliation
+    - Variance detection and reporting
+
+    **External Integrations** (`/api/v1/pos/integrations`):
+    - Toast, Square, Clover POS connectivity
+    - Sync management and logging
+    """
+    return await proxy_request(
+        request,
+        settings.POS_SERVICE_URL,
+        f"/api/v1/pos/{path}",
+    )
+
+
+# =============================================================================
+# Staff & Scheduling Service Routes
+# =============================================================================
+@router.api_route(
+    "/api/v1/staff/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    tags=["Staff Service"],
+)
+async def staff_proxy(request: Request, path: str):
+    """
+    Proxy requests to the Staff & Scheduling Service (SmartStaff).
+
+    Handles all workforce management endpoints including:
+
+    **Staff Profiles** (`/api/v1/staff/profiles`):
+    - Staff profile CRUD operations
+    - Employee ID generation (EMP-001 format)
+    - Employment status management (active, on_leave, terminated)
+    - Employment type tracking (full_time, part_time, seasonal, contractor)
+    - Emergency contact storage
+
+    **Staff Roles** (`/api/v1/staff/profiles/{id}/roles`):
+    - Multi-role assignment (FRONT_DESK, PARTY_HOST, COOK, etc.)
+    - Skill level tracking (trainee, intermediate, expert)
+    - Role-specific hourly rates
+    - Primary role designation
+    - Role certification dates
+
+    **Shifts** (`/api/v1/staff/shifts`):
+    - Shift scheduling with date, start/end times, break duration
+    - Shift status management (scheduled, confirmed, completed, no_show, cancelled)
+    - Conflict detection (overlapping shifts, rest time, max hours)
+    - Shift confirmation workflow
+    - Shift calendar queries by venue/date range
+
+    **Time Clock** (`/api/v1/staff/time-clock`):
+    - Clock in/out with geolocation verification
+    - Geofence enforcement (within venue radius)
+    - Automatic regular/overtime hour calculation
+    - Break tracking
+    - Timesheet queries and manual edits
+
+    **Availability** (`/api/v1/staff/availability`):
+    - Weekly availability preferences per staff member
+    - Day-of-week time windows (available_from, available_to)
+    - Preference levels (preferred, available, unavailable)
+    - Effective date scheduling for future changes
+
+    **Time Off** (`/api/v1/staff/time-off`):
+    - Time-off request submission (vacation, sick, personal, unpaid)
+    - Approval workflow with reviewer tracking
+    - Request status management (pending, approved, denied, cancelled)
+    - Conflict detection with scheduled shifts
+
+    **Shift Swaps** (`/api/v1/staff/swaps`):
+    - Staff-to-staff shift swap requests
+    - Approval workflow for managers
+    - Automatic qualification verification
+    - Swap deadline enforcement (hours before shift)
+
+    **Payroll** (`/api/v1/staff/payroll`):
+    - Payroll period management (open, closed, paid)
+    - Individual payroll entry generation per staff
+    - Regular/overtime hour aggregation
+    - Gross pay, tips, deductions, net pay calculation
+
+    **Analytics** (`/api/v1/staff/analytics`):
+    - Labor cost tracking (daily and hourly granularity)
+    - Labor cost vs. revenue percentage
+    - Overtime reports by staff
+    - Attendance reports (on-time, late, no-show rates)
+    - Staffing alerts (overtime risk, labor cost threshold)
+    """
+    return await proxy_request(
+        request,
+        settings.STAFF_SERVICE_URL,
+        f"/api/v1/{path}",
     )
 
 
